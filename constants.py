@@ -1,0 +1,10 @@
+color_space = 'GRAY' # Can be GRAY, RGB, HSV, LUV, HLS, YUV, YCrCb
+orient = 8  # HOG orientations
+pix_per_cell = 16 # HOG pixels per cell
+cell_per_block = 1 # HOG cells per block
+hog_channel = 'ALL' # Can be 0, 1, 2, or "ALL"
+spatial_size = (16, 16) # Spatial binning dimensions
+hist_bins = 16    # Number of histogram bins
+spatial_feat = False # Spatial features on or off
+hist_feat = False # Histogram features on or off
+hog_feat = True # HOG features on or off
