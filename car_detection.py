@@ -4,9 +4,11 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from skimage import exposure
-
+from keras.preprocessing.image import img_to_array
+from keras.models import load_model
 from constants import *
 from hog_utils import get_hog_features
+from model import get_CNN_model
 
 
 def single_img_features(img, color_space='RGB', spatial_size=(32, 32),
@@ -326,7 +328,10 @@ def process_car_detection(frame, clf, X_scaler):
         hog_feat
     )
 
+    bboxes, confidences = get_CNN_model(frame, bboxes, confidences)    
+
     nms_bboxes = non_max_suppression(bboxes, confidences)
+    
 
     image_with_hot_boxes = draw_boxes(np.copy(frame), nms_bboxes, color=(0, 0, 1), thick=4)
 

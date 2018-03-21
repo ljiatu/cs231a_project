@@ -8,6 +8,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
+from keras.preprocessing.image import ImageDataGenerator
+from keras.optimizers import Adam
+from keras.preprocessing.image import img_to_array
+from keras.utils import to_categorical
+from pyimagesearch.lenet import LeNet
+from keras.models import load_model
+
 from constants import *
 from hog_utils import extract_features
 
@@ -90,3 +97,64 @@ def get_model():
         joblib.dump(clf, 'models/svc.pkl')
 
     return clf, X_scaler
+
+def get_CNN_model(frame, bboxes, confidences):
+    
+    if not os.path.exists('car_not_car.model'):
+        cars, non_cars = read_dataset()
+        data = np.append([cars, non_cars])
+        labels = np.append(np.repeat('vehicle', len(cars)), np.repeat('non-vehicle', len(non_cars)))
+        
+        EPOCHS = 25
+        INIT_LR = 1e-3
+        BATCH_SIZE = 32
+        # partition the data into training and testing splits using 75% of
+        # the data for training and the remaining 25% for testing
+        (trainX, testX, trainY, testY) = train_test_split(data,
+        	labels, test_size=0.2, random_state=2018)
+        
+        # convert the labels from integers to vectors
+        trainY = to_categorical(trainY, num_classes=2)
+        testY = to_categorical(testY, num_classes=2)
+        
+        # initialize the model
+        model = LeNet.build(width=28, height=28, depth=3, classes=2)
+        opt = Adam(lr=INIT_LR, decay=INIT_LR / EPOCHS)
+        model.compile(loss="binary_crossentropy", optimizer=opt,
+        	metrics=["accuracy"])
+        
+        # construct the image generator for data augmentation
+        aug = ImageDataGenerator(rotation_range=30, width_shift_range=0.1,
+        	height_shift_range=0.1, shear_range=0.2, zoom_range=0.2,
+        	horizontal_flip=True, fill_mode="nearest")
+
+        # train the network
+        H = model.fit_generator(aug.flow(trainX, trainY, batch_size=BATCH_SIZE),
+        	validation_data=(testX, testY), steps_per_epoch=len(trainX) // BATCH_SIZE,
+        	epochs=EPOCHS, verbose=1)
+        
+        # save the model to disk
+        model.save("car_not_car.model")
+        
+    else:
+        model = load_model("car_not_car.model")
+    
+    index = 0
+    for box in bboxes:
+        image_temp = frame[box[0][1]:box[1][1], box[0][0]:box[1][0],:]
+        # pre-process the image for classification
+        image_temp = cv2.resize(image_temp, (28, 28))
+        image_temp = image_temp.astype("float") / 255.0
+        image_temp = img_to_array(image_temp)
+        image_temp = np.expand_dims(image_temp, axis=0)
+        
+        # classify the input image
+        (nonVehicle, vehicle) = model.predict(image_temp)[0]
+        if nonVehicle > vehicle:
+            bboxes.remove(box)
+            confidences.remove(confidences[index])
+        else:
+            confidences[index] *= vehicle
+            index += 1
+            
+    return bboxes, confidences
