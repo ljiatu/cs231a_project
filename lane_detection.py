@@ -3,7 +3,7 @@ from collections import deque
 import cv2
 import numpy as np
 
-MAX_NUM_COEFFICIENTS = 10
+from constants import *
 
 
 class LaneDetector(object):
@@ -46,19 +46,7 @@ class LaneDetector(object):
 
         left_points = self._get_fitting_points(frame, left_coefficients)
         right_points = self._get_fitting_points(frame, right_coefficients)
-        #
-        # if not TIMES:
-        #     print left_lines
-        #     print right_lines
-        #     cv2.imwrite('left.png', cv2.cvtColor(_draw_lane_lines(frame, left_points, [255, 0, 0]), cv2.COLOR_BGR2RGB))
-        #     cv2.imwrite('right.png', cv2.cvtColor(_draw_lane_lines(frame, right_points, [255, 0, 0]), cv2.COLOR_BGR2RGB))
-        #     TIMES += 1
 
-        # left_lines = deque(maxlen=50)
-        # right_lines = deque(maxlen=50)
-        # left_line, right_line = lane_lines(frame, lines)
-        # left_line = mean_line(left_line, left_lines)
-        # right_line = mean_line(right_line, right_lines)
         # cv2.imwrite('poly.png', cv2.cvtColor(_draw_lane_lines(frame, [left_points, right_points], [255, 0, 0]), cv2.COLOR_BGR2RGB))
 
         return self._draw_lane_lines(frame, [left_points, right_points], [255, 0, 0])
@@ -85,12 +73,16 @@ class LaneDetector(object):
         """
         Carves out the region where lane exists.
         """
-        rows, cols = frame.shape[:2]
+        rows, cols = frame.shape
         # Boundaries are measured based on the input video.
-        bottom_left = [cols * 0.15, rows]
-        top_left = [cols * 0.45, rows * 0.6]
-        top_right = [cols * 0.6, rows * 0.6]
-        bottom_right = [cols * 0.86, rows]
+        # bottom_left = [cols * 0.15, rows * 0.9]
+        # top_left = [cols * 0.45, rows * 0.62]
+        # top_right = [cols * 0.55, rows * 0.62]
+        # bottom_right = [cols * 0.86, rows * 0.9]
+        bottom_left = (200, 680)
+        top_left = (600, 450)
+        top_right = (750, 450)
+        bottom_right = (1100, 650)
         vertices = np.array([[bottom_left, top_left, top_right, bottom_right]], dtype=np.int32)
     
         mask = np.zeros_like(frame)
@@ -132,7 +124,7 @@ class LaneDetector(object):
         past_coefficients = self.left_coefficients if left else self.right_coefficients
         mean_coefficients = np.mean(past_coefficients, axis=0)
 
-        if len(lines):
+        if len(lines) == 0:
             return mean_coefficients
 
         coefficients = self._fit_polynomial(lines)
@@ -164,66 +156,6 @@ class LaneDetector(object):
         rows = frame.shape[0]
         poly = np.poly1d(coefficients)
         return np.array([(poly(y), y) for y in np.linspace(rows, 0.65 * rows, num=100)], dtype=np.int32)
-    
-    
-    # def average_slope_intercept(lines):
-    #     left_lines = []  # (slope, intercept)
-    #     left_weights = []  # (length,)
-    #     right_lines = []  # (slope, intercept)
-    #     right_weights = []  # (length,)
-    #
-    #     for line in lines:
-    #         for x1, y1, x2, y2 in line:
-    #             if y2 == y1 or (x2 == x1):
-    #                 continue  # ignore a vertical line
-    #             slope = (y2 - y1) / (x2 - x1)
-    #             intercept = y1 - slope * x1
-    #             length = np.sqrt((y2-y1) ** 2 + (x2-x1) ** 2)
-    #             if slope < 0:  # y is reversed in frame
-    #                 left_lines.append((slope, intercept))
-    #                 left_weights.append((length))
-    #             else:
-    #                 right_lines.append((slope, intercept))
-    #                 right_weights.append((length))
-    #
-    #     # add more weight to longer lines
-    #     left_lane = np.dot(left_weights, left_lines) / np.sum(left_weights) if len(left_weights) > 0 else None
-    #     right_lane = np.dot(right_weights, right_lines) / np.sum(right_weights) if len(right_weights) > 0 else None
-    #
-    #     return left_lane, right_lane  # (slope, intercept), (slope, intercept)
-    #
-    #
-    # def make_line_points(y1, y2, line):
-    #     """
-    #     Convert a line represented in slope and intercept into pixel points
-    #     """
-    #     if line is None:
-    #         return None
-    #
-    #     slope, intercept = line
-    #
-    #     if not slope:
-    #         return None
-    #
-    #     # make sure everything is integer as cv2.line requires it
-    #     x1 = int((y1 - intercept) / slope)
-    #     x2 = int((y2 - intercept) / slope)
-    #     y1 = int(y1)
-    #     y2 = int(y2)
-    #
-    #     return (x1, y1), (x2, y2)
-    #
-    #
-    # def lane_lines(frame, lines):
-    #     left_lane, right_lane = average_slope_intercept(lines)
-    #
-    #     y1 = frame.shape[0]  # bottom of the frame
-    #     y2 = y1 * 0.6
-    #
-    #     left_line = make_line_points(y1, y2, left_lane)
-    #     right_line = make_line_points(y1, y2, right_lane)
-    #
-    #     return left_line, right_line
 
     def _draw_lane_lines(self, frame, points, color, thickness=5):
         """
@@ -250,22 +182,3 @@ class LaneDetector(object):
         y_coords = np.append(lines[:, 1], lines[:, 3])
         # Given rows (y-coordinates), we want to get the corresponding columns (x-coordinates).
         return np.polyfit(y_coords, x_coords, 2)
-    
-    def draw_straight_lines(self, frame, lines, color, thickness=5):
-        line_frame = np.zeros_like(frame)
-        for line in lines[0]:
-            if line is not None:
-                cv2.line(line_frame, (line[0], line[1]), (line[2], line[3]), color, thickness)
-        return cv2.addWeighted(frame, 1.0, line_frame, 0.95, 0.0)
-    
-    
-    # def mean_line(line, lines):
-    #     if line is not None:
-    #         lines.append(line)
-    #
-    #     if len(lines) > 0:
-    #         line = np.mean(lines, axis=0, dtype=np.int32)
-    #         line = tuple(map(tuple, line))  # make sure it's tuples not numpy array for cv2.line to work
-    #     return line
-
-

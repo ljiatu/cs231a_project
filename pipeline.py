@@ -1,23 +1,25 @@
 from moviepy.editor import VideoFileClip
 
-from car_detection import process_car_detection
+from car_detection import CarDetector
 from lane_detection import LaneDetector
-from model import get_model
-
-
-def run_detection(frame, lane_detector, clf, X_scaler):
-    lane_detected = lane_detector.process_frame(frame)
-    # car_detected = process_car_detection(frame, clf, X_scaler)
-    return lane_detected
+from model import get_svm_model, get_cnn_model
 
 
 def main():
-    lane_detector = LaneDetector()
-    clf, X_scaler = None, None
+    svm_clf, X_scaler = get_svm_model()
+    cnn_clf = get_cnn_model()
 
-    clip = VideoFileClip('challenge.mp4', audio=False)
-    result = clip.fl_image(lambda frame: run_detection(frame, lane_detector, clf, X_scaler))
+    lane_detector = LaneDetector()
+    car_detector = CarDetector(svm_clf, cnn_clf, X_scaler)
+
+    clip = VideoFileClip('input.mp4', audio=False)
+    result = clip.fl_image(lambda frame: run_detection(frame, lane_detector, car_detector))
     result.write_videofile('output.mp4')
+
+
+def run_detection(frame, lane_detector, car_detector):
+    frame = lane_detector.process_frame(frame)
+    return car_detector.process_frame(frame)
 
 
 if __name__ == '__main__':
