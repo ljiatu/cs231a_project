@@ -1,5 +1,3 @@
-import math
-
 import cv2
 import numpy as np
 from keras.preprocessing.image import img_to_array
@@ -27,11 +25,8 @@ class CarDetector(object):
         # image = image_orig.astype(np.float32)/255
 
         bboxes, confidences = self._get_bboxes_svc(frame, ORIENT, PIXELS_PER_CELL, CELLS_PER_BLOCK, overlap=0.5)
-
         # bboxes, confidences = get_bboxes_cnn(frame, cnn_clf, bboxes, confidences)
-
         nms_bboxes = self._non_max_suppression(bboxes, confidences)
-
         frame_with_bboxes = self._draw_boxes(frame, nms_bboxes, color=(0, 0, 255))
 
         return frame_with_bboxes
@@ -80,18 +75,12 @@ class CarDetector(object):
         ymin = 0
         ymax = rows
 
-        sizex = xmax - xmin
-        sizey = ymax - ymin
-
-        stepx = int(size[0] * overlap)
-        stepy = int(size[1] * overlap)
-
-        step_count_x = int(math.floor(1.0 * sizex / stepx)) - 1
-        step_count_y = int(math.floor(1.0 * sizey / stepy)) - 1
+        stride_x = int(size[1] * overlap)
+        stride_y = int(size[0] * overlap)
 
         return [
-            ((xmin + j * stepx, ymin + i * stepy), (xmin + j * stepx + size[0], ymin + i * stepy + size[1]))
-            for i in xrange(step_count_y) for j in xrange(step_count_x)
+            ((x, y), (x + size[1], y + size[0]))
+            for y in xrange(ymin, ymax, stride_y) for x in xrange(xmin, xmax, stride_x)
         ]
 
     def _get_bboxes_svc(self, frame, orient, pixels_per_cell, cells_per_block, overlap):
@@ -110,7 +99,6 @@ class CarDetector(object):
 
         for size in WINDOW_SIZES:
             windows = self._slide_window(frame, size=size, overlap=overlap)
-            # print windows
             bboxes, confidences = self._search_windows(
                 frame,
                 windows,
