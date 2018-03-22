@@ -5,7 +5,7 @@ from skimage.feature import hog
 def compute_hog_features(image, orient, pixels_per_cell, cells_per_block):
     """Computes hog features from a single image.
 
-    :param image: image in RGB format
+    :param image: image in grayscale
     :param orient: number of HoG orientations
     :param pixels_per_cell: number of pixels per cell
     :param cells_per_block: number of HoG cells per block
@@ -26,7 +26,7 @@ def compute_hog_features(image, orient, pixels_per_cell, cells_per_block):
 def extract_features(images, orient, pixels_per_cell, cells_per_block):
     """Extracts hog features from the given list of images.
 
-    :param images: a list of images in RGB format
+    :param images: a list of images in grayscale
     :param orient: number of HoG orientations
     :param pixels_per_cell: number of pixels per cell
     :param cells_per_block: number of HoG cells per block

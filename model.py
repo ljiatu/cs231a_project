@@ -3,7 +3,6 @@ import os
 
 import cv2
 import numpy as np
-from copy import deepcopy
 from keras.models import load_model
 from keras.optimizers import Adam
 from keras.preprocessing.image import ImageDataGenerator
@@ -18,23 +17,8 @@ from hog_utils import extract_features
 from lenet import LeNet
 
 
-def read_dataset():
-    """
-    Reads the car and non-car images into two lists.
-
-    The car and non-car images are under vehicles/ and non-vehicles/ directories, respectively.
-    """
-    car_images = glob.glob('dataset/vehicles/**/*.png')
-    non_car_images = glob.glob('dataset/non-vehicles/**/*.png')
-
-    cars = [cv2.imread(img) for img in car_images]
-    non_cars = [cv2.imread(img) for img in non_car_images]
-
-    return cars, non_cars
-
-
 def get_svm_model():
-    cars, non_cars = read_dataset()
+    cars, non_cars = _read_dataset()
 
     car_features = extract_features(
         cars,
@@ -52,8 +36,8 @@ def get_svm_model():
     X = np.vstack((car_features, non_car_features)).astype(np.float64)
     scaler = StandardScaler().fit(X)
 
-    if os.path.exists('models/svc.pkl'):
-        model = joblib.load('models/svc.pkl')
+    if os.path.exists('models/svm.pkl'):
+        model = joblib.load('models/svm.pkl')
     else:
         data = scaler.transform(X)
         labels = np.hstack((np.ones(len(car_features)), np.zeros(len(non_car_features))))
@@ -62,8 +46,8 @@ def get_svm_model():
         X_train, X_test, Y_train, Y_test = train_test_split(data, labels, test_size=0.2, random_state=rand_state)
         model = SVC()
         model.fit(X_train, Y_train)
-        print 'Test Accuracy of SVC = ', round(model.score(X_test, Y_test), 4)
-        joblib.dump(model, 'models/svc.pkl')
+        print 'Test Accuracy of SVM = ', round(model.score(X_test, Y_test), 4)
+        joblib.dump(model, 'models/svm.pkl')
 
     return model, scaler
 
@@ -72,11 +56,14 @@ def get_cnn_model():
     if os.path.exists('models/lenet.model'):
         model = load_model('models/lenet.model')
     else:
-        cars, non_cars = read_dataset()
-        data = deepcopy(cars)
-        data.extend(non_cars)
-        data = np.array(data, dtype=np.float) / 255.0
-        labels = np.append(np.ones(len(cars)), np.zeros(len(non_cars)))
+        cars, non_cars = _read_dataset()
+        normalized_cars = [car / np.linalg.norm(car) for car in cars]
+        normalized_non_cars = [non_car / np.linalg.norm(non_car) for non_car in non_cars]
+        num_cars = len(normalized_cars)
+        num_non_cars = len(normalized_non_cars)
+        normalized_cars.extend(normalized_non_cars)
+        data = np.array(normalized_cars)
+        labels = np.append(np.ones(num_cars), np.zeros(num_non_cars))
 
         # Partition the data into training and testing splits using 80% of
         # the data for training and the remaining 20% for testing.
@@ -87,7 +74,7 @@ def get_cnn_model():
         Y_train = to_categorical(Y_train, num_classes=2)
         Y_test = to_categorical(Y_test, num_classes=2)
 
-        # Initialize the model.
+        # Initialize the model. Depth is set to 1 since we are training on grayscale data.
         model = LeNet.build(width=64, height=64, depth=3, classes=2)
         opt = Adam(lr=INIT_LR, decay=INIT_LR/EPOCHS)
         model.compile(loss='binary_crossentropy', optimizer=opt, metrics=['accuracy'])
@@ -116,3 +103,16 @@ def get_cnn_model():
         model.save('models/lenet.model')
 
     return model
+
+
+def _read_dataset():
+    """
+    Reads the car and non-car images into two lists.
+    """
+    car_images = glob.glob('dataset/vehicles/**/*.png')
+    non_car_images = glob.glob('dataset/non-vehicles/**/*.png')
+
+    cars = [cv2.imread(img) for img in car_images]
+    non_cars = [cv2.imread(img) for img in non_car_images]
+
+    return cars, non_cars

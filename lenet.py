@@ -1,6 +1,6 @@
 # coding=utf-8
 from keras import Sequential
-from keras.layers import Conv2D, Activation, MaxPooling2D, Flatten, Dense, K
+from keras.layers import Activation, Conv2D, Dense, Flatten, K, MaxPooling2D
 
 
 class LeNet(object):

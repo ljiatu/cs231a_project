@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-from keras.preprocessing.image import img_to_array
 
 from constants import *
 from hog_utils import compute_hog_features
@@ -13,8 +12,8 @@ WINDOW_SIZES = [
 
 
 class CarDetector(object):
-    def __init__(self, svc_clf, cnn_clf, scaler):
-        self.svc_clf = svc_clf
+    def __init__(self, svm_clf, cnn_clf, scaler):
+        self.svm_clf = svm_clf
         self.cnn_clf = cnn_clf
         self.scaler = scaler
 
@@ -24,40 +23,17 @@ class CarDetector(object):
         # image you are searching is a .jpg (scaled 0 to 255)
         # image = image_orig.astype(np.float32)/255
 
-        bboxes, confidences = self._get_bboxes_svc(frame, ORIENT, PIXELS_PER_CELL, CELLS_PER_BLOCK, overlap=0.5)
-        # bboxes, confidences = get_bboxes_cnn(frame, cnn_clf, bboxes, confidences)
+        # Gets a flattened list of all windows.
+        windows = []
+        for size in WINDOW_SIZES:
+            windows.extend(self._slide_window(frame, size, overlap=0.5))
+
+        bboxes, confidences = self._get_bboxes_svm(frame, windows)
+        # bboxes, confidences = self._get_bboxes_cnn(frame, bboxes)
         nms_bboxes = self._non_max_suppression(bboxes, confidences)
         frame_with_bboxes = self._draw_boxes(frame, nms_bboxes, color=(0, 0, 255))
 
         return frame_with_bboxes
-
-    def _search_windows(self, frame, windows, orient, pixels_per_cell, cells_per_block):
-        """
-        Returns bounding boxes that contain cars.
-
-        :param frame: a video frame
-        :param orient: number of HoG orientations
-        :param pixels_per_cell: number of pixels per cell
-        :param cells_per_block: number of HoG cells per block
-        :returns: a list of bounding boxes.
-        """
-        bboxes = []
-        confidences = []
-
-        for window in windows:
-            test_img = cv2.resize(
-                frame[window[0][1]:window[1][1], window[0][0]:window[1][0]],
-                (64, 64),
-                interpolation=cv2.INTER_AREA
-            )
-            features = compute_hog_features(test_img, orient, pixels_per_cell, cells_per_block)
-            test_features = self.scaler.transform(np.array(features).reshape(1, -1))
-            confidence = self.svc_clf.decision_function(test_features)
-            if confidence >= 1:
-                bboxes.append(window)
-                confidences.append(confidence)
-
-        return bboxes, confidences
 
     def _slide_window(self, frame, size, overlap):
         """
@@ -70,9 +46,9 @@ class CarDetector(object):
         """
         rows, cols = frame.shape[:2]
         # Boundaries are measured based on the input video.
-        xmin = cols / 2
+        xmin = 0
         xmax = cols
-        ymin = 0
+        ymin = rows / 2
         ymax = rows
 
         stride_x = int(size[1] * overlap)
@@ -83,52 +59,61 @@ class CarDetector(object):
             for y in xrange(ymin, ymax, stride_y) for x in xrange(xmin, xmax, stride_x)
         ]
 
-    def _get_bboxes_svc(self, frame, orient, pixels_per_cell, cells_per_block, overlap):
+    def _get_bboxes_svm(self, frame, windows):
         """
         Returns bounding boxes that contain cars by applying the SVM classifier.
 
         :param frame: a video frame
-        :param orient: number of HoG orientations
-        :param pixels_per_cell: number of pixels per cell
-        :param cells_per_block: number of HoG cells per block
-        :param overlap: overlap between windows
+        :param windows: a list of windows that we apply the classifier to
         :returns: a list of bounding boxes, as well as the confidence of each bounding box.
         """
-        all_bboxes = []
-        all_confidences = []
+        bboxes = []
+        confidences = []
 
-        for size in WINDOW_SIZES:
-            windows = self._slide_window(frame, size=size, overlap=overlap)
-            bboxes, confidences = self._search_windows(
-                frame,
-                windows,
-                orient=orient,
-                pixels_per_cell=pixels_per_cell,
-                cells_per_block=cells_per_block,
+        for window in windows:
+            bounded_area = cv2.resize(
+                frame[window[0][1]:window[1][1], window[0][0]:window[1][0]],
+                (64, 64),
+                interpolation=cv2.INTER_AREA
             )
-            all_bboxes.extend(bboxes)
-            all_confidences.extend(confidences)
 
-        return all_bboxes, all_confidences
+            features = compute_hog_features(bounded_area, ORIENT, PIXELS_PER_CELL, CELLS_PER_BLOCK)
+            test_features = self.scaler.transform(np.array(features).reshape(1, -1))
+            confidence = self.svm_clf.decision_function(test_features)
+            if confidence >= 1:
+                bboxes.append(window)
+                confidences.append(confidence)
 
-    def _get_bboxes_cnn(self, frame, bboxes, confidences):
-        new_bboxes = []
-        new_confidences = []
-        for index, bbox in enumerate(bboxes):
-            # Pre-process the image for classification.
-            image_temp = frame[bbox[0][1]:bbox[1][1], bbox[0][0]:bbox[1][0], :]
-            image_temp = cv2.resize(image_temp, (64, 64))
-            image_temp = image_temp.astype(np.float) / 255.0
-            image_temp = img_to_array(image_temp)
-            image_temp = np.expand_dims(image_temp, axis=0)
+        return bboxes, confidences
 
-            # Classify the input image.
-            non_vehicle, vehicle = self.cnn_clf.predict(image_temp)[0]
+    def _get_bboxes_cnn(self, frame, windows):
+        """
+        Returns bounding boxes that contain cars by applying the CNN classifier.
+
+        :param frame: a video frame
+        :param windows: a list of windows that we apply the classifier to
+        :returns: a list of bounding boxes, as well as the confidence of each bounding box.
+        """
+        bboxes = []
+        confidences = []
+
+        for window in windows:
+            bounded_area = cv2.resize(
+                frame[window[0][1]:window[1][1], window[0][0]:window[1][0]],
+                (64, 64),
+                interpolation=cv2.INTER_AREA
+            )
+            # Normalize the image.
+            bounded_area = bounded_area / np.linalg.norm(bounded_area)
+            # Augment at axis 0 to make it four-dimensional.
+            bounded_area = np.expand_dims(bounded_area, axis=0)
+
+            non_vehicle, vehicle = self.cnn_clf.predict(bounded_area)[0]
             if vehicle > non_vehicle:
-                new_bboxes.append(bbox)
-                new_confidences.append(confidences[index] * vehicle)
+                bboxes.append(window)
+                confidences.append(vehicle)
 
-        return new_bboxes, new_confidences
+        return bboxes, confidences
 
     def _non_max_suppression(self, bboxes, confidences):
         def _overlaps(nms_bboxes, bbox):
