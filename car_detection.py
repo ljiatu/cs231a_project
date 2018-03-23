@@ -18,18 +18,15 @@ class CarDetector(object):
         self.scaler = scaler
 
     def process_frame(self, frame):
-        # Uncomment the following line if you extracted training
-        # data from .png images (scaled 0 to 1 by mpimg) and the
-        # image you are searching is a .jpg (scaled 0 to 255)
-        # image = image_orig.astype(np.float32)/255
-
         # Gets a flattened list of all windows.
         windows = []
         for size in WINDOW_SIZES:
             windows.extend(self._slide_window(frame, size, overlap=0.5))
 
         bboxes, confidences = self._get_bboxes_svm(frame, windows)
-        # bboxes, confidences = self._get_bboxes_cnn(frame, bboxes)
+        bboxes, confidences = self._get_bboxes_cnn(frame, bboxes)
+        with open('bboxes_cnn.text', 'a+') as f:
+            f.write('%s\n' % str(bboxes))
         nms_bboxes = self._non_max_suppression(bboxes, confidences)
         frame_with_bboxes = self._draw_boxes(frame, nms_bboxes, color=(0, 0, 255))
 
@@ -108,8 +105,8 @@ class CarDetector(object):
             # Augment at axis 0 to make it four-dimensional.
             bounded_area = np.expand_dims(bounded_area, axis=0)
 
-            non_vehicle, vehicle = self.cnn_clf.predict(bounded_area)[0]
-            if vehicle > non_vehicle:
+            _, vehicle = self.cnn_clf.predict(bounded_area)[0]
+            if vehicle >= 0.99:
                 bboxes.append(window)
                 confidences.append(vehicle)
 

@@ -47,8 +47,6 @@ class LaneDetector(object):
         left_points = self._get_fitting_points(frame, left_coefficients)
         right_points = self._get_fitting_points(frame, right_coefficients)
 
-        # cv2.imwrite('poly.png', cv2.cvtColor(_draw_lane_lines(frame, [left_points, right_points], [255, 0, 0]), cv2.COLOR_BGR2RGB))
-
         return self._draw_lane_lines(frame, [left_points, right_points], [255, 0, 0])
 
     def _filter_colors(self, frame):
@@ -73,12 +71,7 @@ class LaneDetector(object):
         """
         Carves out the region where lane exists.
         """
-        rows, cols = frame.shape
         # Boundaries are measured based on the input video.
-        # bottom_left = [cols * 0.15, rows * 0.9]
-        # top_left = [cols * 0.45, rows * 0.62]
-        # top_right = [cols * 0.55, rows * 0.62]
-        # bottom_right = [cols * 0.86, rows * 0.9]
         bottom_left = (200, 680)
         top_left = (600, 450)
         top_right = (750, 450)

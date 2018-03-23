@@ -1,7 +1,7 @@
 # Lane detector constants
 MAX_NUM_COEFFICIENTS = 10
 
-# HoG constants
+# HOG constants
 ORIENT = 8
 PIXELS_PER_CELL = 16
 CELLS_PER_BLOCK = 1
